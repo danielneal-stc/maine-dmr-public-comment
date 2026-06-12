@@ -1,0 +1,58 @@
+<?php
+
+use Drupal\Core\Form\FormStateInterface;
+
+/**
+ * Resolves a ?nid= query parameter to a numeric node ID.
+ *
+ * Accepts either a numeric ID ("5") or a URL alias ("musky-oysters-2026").
+ * Returns NULL if the parameter is empty or cannot be resolved to a node.
+ *
+ * @param string|null $param
+ *   The raw value of the ?nid= query parameter.
+ *
+ * @return int|null
+ *   The numeric node ID, or NULL if unresolvable.
+ */
+function dmr_public_comment_resolve_nid(?string $param): ?int {
+  if ($param === NULL || $param === '') {
+    return NULL;
+  }
+
+  if (ctype_digit($param)) {
+    return (int) $param;
+  }
+
+  // Resolve URL alias (e.g. "musky-oysters-2026") to its internal node path.
+  $path = \Drupal::service('path_alias.manager')->getPathByAlias('/' . ltrim($param, '/'));
+  if (preg_match('/^\/node\/(\d+)$/', $path, $matches)) {
+    return (int) $matches[1];
+  }
+
+  return NULL;
+}
+
+/**
+ * Attaches the autofill library and passes context-appropriate settings to JS.
+ *
+ * When ?nid= is present (numeric ID or URL alias), the resolved node ID is
+ * passed so JS fetches field values from the node data endpoint (node mode).
+ * Otherwise the Pega case endpoint is used and JS reads case_id from the
+ * query string (Pega mode).
+ */
+function dmr_public_comment_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  if ($form_id !== 'webform_submission_public_comment_form_add_form') {
+    return;
+  }
+
+  $form['#attached']['library'][] = 'dmr_public_comment/case_autofill';
+
+  $nid = dmr_public_comment_resolve_nid(\Drupal::request()->query->get('nid'));
+  if ($nid) {
+    $form['#attached']['drupalSettings']['dmrPublicComment']['nodeApiBase'] = '/dmr/public-comment/node/';
+    $form['#attached']['drupalSettings']['dmrPublicComment']['nodeId'] = $nid;
+  }
+  else {
+    $form['#attached']['drupalSettings']['dmrPublicComment']['apiBase'] = '/dmr/public-comment/case/';
+  }
+}

@@ -1,0 +1,13 @@
+dmr_public_comment.settings:
+  type: config_object
+  label: 'DMR Public Comment settings'
+  mapping:
+    base_url:
+      type: string
+      label: 'Pega base URL'
+    client_id:
+      type: string
+      label: 'OAuth Client ID'
+    client_secret:
+      type: string
+      label: 'OAuth Client Secret'

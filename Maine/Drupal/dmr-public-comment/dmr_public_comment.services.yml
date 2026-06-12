@@ -1,0 +1,12 @@
+services:
+  logger.channel.dmr_public_comment:
+    parent: logger.channel_base
+    arguments: ['dmr_public_comment']
+
+  dmr_public_comment.case_service:
+    class: Drupal\dmr_public_comment\Service\PegaCaseService
+    arguments:
+      - '@http_client'
+      - '@cache.default'
+      - '@logger.channel.dmr_public_comment'
+      - '@config.factory'

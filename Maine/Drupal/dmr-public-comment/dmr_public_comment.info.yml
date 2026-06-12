@@ -1,0 +1,7 @@
+name: DMR Public Comment
+type: module
+description: Submits public comments to Pega and fetches case data for the public comment form
+core_version_requirement: ^10 || ^11
+package: Custom
+dependencies:
+  - webform:webform

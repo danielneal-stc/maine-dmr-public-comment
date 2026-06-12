@@ -1,0 +1,24 @@
+# Public endpoints — data returned here is public information used on the
+# public comment form. Access is intentionally unrestricted.
+dmr_public_comment.case_data:
+  path: '/dmr/public-comment/case/{caseId}'
+  defaults:
+    _controller: '\Drupal\dmr_public_comment\Controller\CaseProxyController::getCaseData'
+  requirements:
+    _access: 'TRUE'
+
+dmr_public_comment.node_data:
+  path: '/dmr/public-comment/node/{nid}'
+  defaults:
+    _controller: '\Drupal\dmr_public_comment\Controller\CaseProxyController::getNodeData'
+  requirements:
+    _access: 'TRUE'
+    nid: '\d+'
+
+dmr_public_comment.settings:
+  path: '/admin/config/dmr-public-comment'
+  defaults:
+    _form: '\Drupal\dmr_public_comment\Form\PegaSettingsForm'
+    _title: 'DMR Public Comment settings'
+  requirements:
+    _permission: 'administer site configuration'

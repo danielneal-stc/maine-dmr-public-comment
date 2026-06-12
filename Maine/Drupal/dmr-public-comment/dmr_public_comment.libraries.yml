@@ -1,0 +1,5 @@
+case_autofill:
+  js:
+    js/case_autofill.js: {}
+  dependencies:
+    - core/drupalSettings
