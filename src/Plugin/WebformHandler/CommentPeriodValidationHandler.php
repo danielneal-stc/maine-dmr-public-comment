@@ -73,11 +73,11 @@ class CommentPeriodValidationHandler extends WebformHandlerBase {
   }
 
   /**
-   * Validates the comment period using dates stored on a public_comment_period node.
+   * Validates the comment period using dates stored on a public_comment_form node.
    */
   private function validateFromNode(int $nid, FormStateInterface $form_state): void {
     $node = Node::load($nid);
-    if (!$node || $node->bundle() !== 'public_comment_period' || !$node->isPublished()) {
+    if (!$node || $node->bundle() !== 'public_comment_form' || !$node->isPublished()) {
       $form_state->setErrorByName('', $this->t('This application could not be found.'));
       return;
     }

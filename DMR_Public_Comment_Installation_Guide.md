@@ -22,7 +22,7 @@ Before starting, confirm the following are in place:
 2. PHP 8.2 or higher is installed on the server.
 3. You have access to the Drupal admin panel with the Administrator role.
 4. You have the following from the Pega team:
-      - Pega base URL (e.g. https://maine-dmr-dt6.pegacloud.net)
+      - Pega base URL
       - OAuth 2.0 Client ID
       - OAuth 2.0 Client Secret
 5. You have the dmr_public_comment module folder provided by the developer.
@@ -115,7 +115,7 @@ Skip this part if you do not yet have Pega credentials. Return to it once they a
 1. Navigate to Configuration -> DMR Public Comment, or go directly to /admin/config/dmr-public-comment.
 2. Fill in the following fields:
 
-      Base URL:       The Pega server URL, e.g. https://maine-dmr.pegacloud.net (no trailing slash)
+      Base URL:       The Pega server URL
       Client ID:      The OAuth 2.0 Client ID provided by the Pega team
       Client Secret:  The OAuth 2.0 Client Secret provided by the Pega team
 
@@ -155,7 +155,7 @@ This content type stores application details for manual (non-Pega) comment perio
 
 Step 1 — Check if the content type already exists
 
-Navigate to /node/add/public_comment_period in your browser.
+Navigate to /node/add/public_comment_form in your browser.
       - If you see a form, the content type already exists. Skip to Part 7.
       - If you see a "Page not found" error, continue below.
 
@@ -164,8 +164,8 @@ Step 2 — Create the content type
 1. Navigate to Structure -> Content types.
 2. Click Add content type.
 3. Enter the following:
-      Name:         Public Comment Period
-      Machine name: public_comment_period  (verify this matches exactly — it auto-fills)
+      Name:         Public Comment Form
+      Machine name: public_comment_form  (verify this matches exactly — it auto-fills)
 4. Under Display settings, make sure "Display author and date information" is turned off.
 5. Click Save and manage fields.
 
@@ -196,7 +196,7 @@ Click Save settings.
 
 Step 4 — Hide fields from public display
 
-1. Navigate to Structure -> Content types -> Public Comment Period -> Manage display.
+1. Navigate to Structure -> Content types -> Public Comment Form -> Manage display.
 2. For every field in the list, change the format dropdown to Hidden.
 3. Click Save.
 
@@ -235,7 +235,7 @@ Option B — Manual application (not in Pega)
 
 Use this when the application is not in Pega.
 
-1. Navigate to /node/add/public_comment_period in your browser.
+1. Navigate to /node/add/public_comment_form in your browser.
 2. Fill in all fields:
       Title:                  An internal name, not shown to the public (e.g. Musky Oysters LLC — Standard Lease 2026)
       Applicant Name:         The applicant's legal name
@@ -275,7 +275,7 @@ Testing the Pega-linked form:
 
 Testing the manual (node) form:
 
-1. Create a test Public Comment Period node following Option B in Part 8.
+1. Create a test Public Comment Form node following Option B in Part 8.
 2. Open an incognito browser window.
 3. Navigate to /public-comment-form?nid=[your-alias].
 4. Verify the following:

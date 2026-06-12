@@ -7,7 +7,7 @@
       var url;
 
       if (dmr.nodeId) {
-        // Node mode: form is embedded on a public_comment_period node.
+        // Node mode: form is embedded on a public_comment_form node.
         // Field values come from the node itself via the node data endpoint.
         url = dmr.nodeApiBase + dmr.nodeId;
       }

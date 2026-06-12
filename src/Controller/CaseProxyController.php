@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
  *
  * Two endpoints are provided — one fetching live data from the Pega API for
  * cases linked to Pega (?case_id=), and one reading from a Drupal
- * public_comment_period node for manually-managed applications (?nid=).
+ * public_comment_form node for manually-managed applications (?nid=).
  */
 class CaseProxyController implements ContainerInjectionInterface {
 
@@ -76,7 +76,7 @@ class CaseProxyController implements ContainerInjectionInterface {
   }
 
   /**
-   * Returns JSON data for a public_comment_period node to pre-populate the form.
+   * Returns JSON data for a public_comment_form node to pre-populate the form.
    *
    * Used when the form is accessed with a ?nid= query parameter (manual/non-Pega
    * applications). Returns 404 if the node does not exist, is not the right
@@ -91,7 +91,7 @@ class CaseProxyController implements ContainerInjectionInterface {
    */
   public function getNodeData(int $nid): JsonResponse {
     $node = Node::load($nid);
-    if (!$node || $node->bundle() !== 'public_comment_period' || !$node->isPublished()) {
+    if (!$node || $node->bundle() !== 'public_comment_form' || !$node->isPublished()) {
       return new JsonResponse(['error' => 'Not found'], 404);
     }
 
