@@ -142,11 +142,21 @@ Verifying the webform handlers:
       - Comment submission
 3. If either is missing, contact the developer.
 
+Setting up the URL alias:
+
+The webform's default URL is /webform/public_comment_form. You must create a URL alias so the public links work correctly.
+
+1. Navigate to Configuration -> URL aliases.
+2. Click Add alias.
+3. Enter the following:
+      System path:  /webform/public_comment_form
+      URL alias:    /form/public-comment-form
+4. Click Save.
+
 Verifying the webform URL:
 
-1. Click the View tab on the Public Comment Form.
-2. Confirm the form is accessible at /public-comment-form.
-3. The form should display fields for Applicant, Town, Location, Comment Period, and the comment text box.
+1. Navigate to /form/public-comment-form in your browser.
+2. The form should display fields for Applicant, Town, Location, Comment Period, and the comment text box.
 
 
 PART 6 — SET UP THE PUBLIC COMMENT PERIOD CONTENT TYPE
@@ -225,7 +235,7 @@ Use this when the application exists in Pega.
 1. Obtain the case ID from Pega (e.g. L-14372).
 2. The shareable public link is:
 
-      https://[your-site]/public-comment-form?case_id=L-14372
+      https://[your-site]/form/public-comment-form?case_id=L-14372
 
    Replace L-14372 with the actual case ID and [your-site] with your site's domain.
 
@@ -250,7 +260,7 @@ Use this when the application is not in Pega.
 4. Click Save.
 5. The shareable public link is:
 
-      https://[your-site]/public-comment-form?nid=musky-oysters-standard-lease-2026
+      https://[your-site]/form/public-comment-form?nid=musky-oysters-standard-lease-2026
 
    Replace the alias with whatever you set in step 3.
 
@@ -264,7 +274,7 @@ Before going live, test both form types using a private/incognito browser window
 Testing the Pega-linked form:
 
 1. Open an incognito browser window.
-2. Navigate to /public-comment-form?case_id=[a valid case ID].
+2. Navigate to /form/public-comment-form?case_id=[a valid case ID].
 3. Verify the following:
       - Applicant, Town, Location, and Comment Period fields are pre-populated
       - License Type is pre-populated
@@ -277,7 +287,7 @@ Testing the manual (node) form:
 
 1. Create a test Public Comment Form node following Option B in Part 8.
 2. Open an incognito browser window.
-3. Navigate to /public-comment-form?nid=[your-alias].
+3. Navigate to /form/public-comment-form?nid=[your-alias].
 4. Verify the following:
       - Applicant, Town, Location, and Comment Period fields are pre-populated from the node
       - If Experimental Lease is selected, the checkbox appears
