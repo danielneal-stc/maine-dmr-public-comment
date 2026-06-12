@@ -54,18 +54,18 @@ class CaseProxyController implements ContainerInjectionInterface {
    */
   public function getCaseData(string $caseId): JsonResponse {
     if (!preg_match('/^[A-Z]+-\d+$/i', $caseId)) {
-      return new JsonResponse(['error' => 'Invalid case ID format'], 400);
+      return $this->jsonResponse(['error' => 'Invalid case ID format'], 400);
     }
 
     $content = $this->pegaCaseService->getCaseContent($caseId);
     if ($content === NULL) {
-      return new JsonResponse(['error' => 'Failed to retrieve case data'], 502);
+      return $this->jsonResponse(['error' => 'Failed to retrieve case data'], 502);
     }
 
     $start = $this->getNestedValue($content, self::FIELD_PERIOD_START);
     $end   = $this->getNestedValue($content, self::FIELD_PERIOD_END);
 
-    return new JsonResponse([
+    return $this->jsonResponse([
       'case_id'        => $caseId,
       'applicant'      => $this->getNestedValue($content, self::FIELD_APPLICANT),
       'town'           => $this->getNestedValue($content, self::FIELD_TOWN),
@@ -92,12 +92,12 @@ class CaseProxyController implements ContainerInjectionInterface {
   public function getNodeData(int $nid): JsonResponse {
     $node = Node::load($nid);
     if (!$node || $node->bundle() !== 'public_comment_form' || !$node->isPublished()) {
-      return new JsonResponse(['error' => 'Not found'], 404);
+      return $this->jsonResponse(['error' => 'Not found'], 404);
     }
 
     // Drupal datetime fields store values as "YYYY-MM-DDTHH:MM:SS"; take the date portion only.
-    $start = substr($node->get('field_comment_start')->value ?? '', 0, 10);
-    $end   = substr($node->get('field_comment_end')->value ?? '', 0, 10);
+    $start = substr($node->get('field_comment_period_start')->value ?? '', 0, 10);
+    $end   = substr($node->get('field_comment_period_end')->value ?? '', 0, 10);
 
     // The Selection list field stores the machine name (e.g. "experimental_lease")
     // but the webform select expects the display label (e.g. "Experimental Lease")
@@ -106,13 +106,19 @@ class CaseProxyController implements ContainerInjectionInterface {
     $allowedValues  = $node->getFieldDefinition('field_license_type')->getSetting('allowed_values');
     $licenseType    = $allowedValues[$licenseTypeKey] ?? $licenseTypeKey;
 
-    return new JsonResponse([
+    return $this->jsonResponse([
       'applicant'      => $node->get('field_applicant_name')->value ?? '',
       'town'           => $node->get('field_town')->value ?? '',
       'location'       => $node->get('field_location')->value ?? '',
       'comment_period' => $start && $end ? $this->formatPegaDate($start) . ' - ' . $this->formatPegaDate($end) : '',
       'license_type'   => $licenseType,
     ]);
+  }
+
+  private function jsonResponse(array $data, int $status = 200): JsonResponse {
+    $response = new JsonResponse($data, $status);
+    $response->headers->set('X-Content-Type-Options', 'nosniff');
+    return $response;
   }
 
   /**

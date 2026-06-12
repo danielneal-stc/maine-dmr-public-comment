@@ -13,8 +13,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * Blocks form submissions that fall outside the case's open comment period.
  *
  * Supports two modes detected from the request query string:
- *   - Node mode (?nid=): dates read from the node's field_comment_start /
- *     field_comment_end fields.
+ *   - Node mode (?nid=): dates read from the node's field_comment_period_start /
+ *     field_comment_period_end fields.
  *   - Pega mode (?case_id=): dates fetched live from the Pega API.
  *
  * The period closes at 4:00 PM Eastern time on the end date. America/New_York
@@ -83,8 +83,8 @@ class CommentPeriodValidationHandler extends WebformHandlerBase {
     }
 
     // Drupal datetime fields store "YYYY-MM-DDTHH:MM:SS"; take the date portion.
-    $startStr = substr($node->get('field_comment_start')->value ?? '', 0, 10);
-    $endStr   = substr($node->get('field_comment_end')->value ?? '', 0, 10);
+    $startStr = substr($node->get('field_comment_period_start')->value ?? '', 0, 10);
+    $endStr   = substr($node->get('field_comment_period_end')->value ?? '', 0, 10);
 
     if (!$startStr || !$endStr) {
       $form_state->setErrorByName('', $this->t('This application is not currently open for public comment.'));

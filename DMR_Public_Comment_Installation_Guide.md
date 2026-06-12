@@ -137,10 +137,12 @@ The webform is provided as an exported configuration file (public_comment_form.y
 Verifying the webform handlers:
 
 1. On the Webforms list, find Public Comment Form and click Build -> Settings -> Emails / Handlers.
-2. You should see two handlers listed:
+2. You should see four handlers listed:
       - Comment period validation
       - Comment submission
-3. If either is missing, contact the developer.
+      - Submission Confirmation (Pega)
+      - Submission Confirmation (Paper Application)
+3. If any are missing, contact the developer.
 
 Setting up the URL alias:
 
@@ -189,8 +191,8 @@ You will add 6 fields. For each one, click Add field, select the type, enter the
       Applicant Name           field_applicant_name                Plain text
       Town                     field_town                          Plain text
       Location                 field_location                      Plain text
-      Comment Period Start     field_comment_start                 Date and time
-      Comment Period End       field_comment_end                   Date and time
+      Comment Period Start     field_comment_period_start          Date and time
+      Comment Period End       field_comment_period_end            Date and time
       License Type             field_license_type                  Selection list
 
 For the License Type field only: after saving you will be taken to a settings screen. Add the following options, one per line:
@@ -206,29 +208,7 @@ For the License Type field only: after saving you will be taken to a settings sc
 
 Click Save settings.
 
-Step 4 — Hide fields from public display
-
-1. Navigate to Structure -> Content types -> Public Comment Form -> Manage display.
-2. For every field in the list, change the format dropdown to Hidden.
-3. Click Save.
-
-
-PART 7 — CONFIGURE EMAIL NOTIFICATIONS
-
-When a comment is submitted via a manual (non-Pega) form, it is stored in Drupal and a notification email is sent. Set up the email here.
-
-1. Navigate to Structure -> Webforms.
-2. Find Public Comment Form and click Build.
-3. Click the Settings tab, then Emails / Handlers.
-4. Click Add email.
-5. Configure the email:
-      To email:  The address that should receive notifications (e.g. dmr.aquaculture@maine.gov)
-      Subject:   e.g. New Public Comment Submitted
-      Message:   Use the default template, or customize as needed.
-6. Click Save.
-
-
-PART 8 — CREATING A PUBLIC COMMENT PERIOD
+PART 7 — CREATING A PUBLIC COMMENT PERIOD
 
 Option A — Pega-linked application
 
@@ -248,91 +228,18 @@ Option B — Manual application (not in Pega)
 Use this when the application is not in Pega.
 
 1. Navigate to /node/add/public_comment_form in your browser.
-2. Fill in all fields:
-      Title:                  An internal name, not shown to the public (e.g. Musky Oysters LLC — Standard Lease 2026)
-      Applicant Name:         The applicant's legal name
-      Town:                   Town(s) where the lease is located
-      Location:               Waterbody name
-      Comment Period Start:   The date the comment period opens
-      Comment Period End:     The date the comment period closes (closes automatically at 4:00 PM Eastern)
-      License Type:           Select from the dropdown
+2. Fill in all fields
 3. In the URL alias field (right sidebar), enter a short, meaningful alias with no spaces:
-      Example: musky-oysters-standard-lease-2026
+      Example: oysters-standard-lease-2026
       Use only lowercase letters, numbers, and hyphens.
 4. Click Save.
 5. The shareable public link is:
 
-      https://[your-site]/form/public-comment-form?nid=musky-oysters-standard-lease-2026
+      https://[your-site]/form/public-comment-form?nid=oysters-standard-lease-2026
 
    Replace the alias with whatever you set in step 3.
 
 6. Share this link with the public.
-
-
-PART 9 — TESTING
-
-Before going live, test both form types using a private/incognito browser window so you are not logged in as admin.
-
-Testing the Pega-linked form:
-
-1. Open an incognito browser window.
-2. Navigate to /form/public-comment-form?case_id=[a valid case ID].
-3. Verify the following:
-      - Applicant, Town, Location, and Comment Period fields are pre-populated
-      - License Type is pre-populated
-      - If the license type is Experimental Lease, a checkbox appears below it
-      - Submitting before the comment period opens shows an error
-      - Submitting after the comment period closes shows an error
-      - A valid submission completes without error and appears in Pega
-
-Testing the manual (node) form:
-
-1. Create a test Public Comment Form node following Option B in Part 8.
-2. Open an incognito browser window.
-3. Navigate to /form/public-comment-form?nid=[your-alias].
-4. Verify the following:
-      - Applicant, Town, Location, and Comment Period fields are pre-populated from the node
-      - If Experimental Lease is selected, the checkbox appears
-      - A valid submission completes without error
-      - The submission appears under Structure -> Webforms -> Public Comment Form -> Results
-      - The notification email is received
-
-
-PART 10 — PEGA CONFIGURATION REFERENCE
-
-This section is for the Pega administrator. These items must be configured in Pega before the Pega-linked form will work.
-
-      Item                  Details
-      OAuth 2.0 client      Client credentials grant type. Generate a Client ID and Secret to enter in Part 4 of this guide.
-      REST service          Machine name: drupal_public_comment. Access group: Licensing:DrupalIntegration.
-      Page view             PublicCommentDrupalInfo on the case class — exposes read-only fields to Drupal.
-      Data class            SOM-DMR-Data-Comment with D_PublicComment data page.
-      Activity              LinkCommentAttachments — links uploaded files to the comment data record.
-      Access role           Integration operator must have Read and Execute access on Rule-Obj-Report-Definition, PegaSocial-Document, and Data-WorkAttach-File.
-
-
-TROUBLESHOOTING
-
-Form fields are not auto-populating
-      Clear the Drupal cache (Configuration -> Performance -> Clear all caches) and reload the page.
-
-"Your comment could not be submitted" error
-      Check Pega credentials at /admin/config/dmr-public-comment and confirm the Pega server is reachable.
-
-"A valid case ID is required" error
-      The case_id parameter is missing or malformed in the URL.
-
-"This application could not be found" error
-      The alias in the nid parameter does not match any published node. Check the node exists and is published.
-
-"The comment period has closed" error
-      The current time is past 4:00 PM Eastern on the end date set in Pega or on the node.
-
-Module not appearing in Extend
-      Confirm the dmr_public_comment folder is inside web/modules/custom/ and contains the dmr_public_comment.info.yml file.
-
-Email notifications not arriving
-      Check the email handler in the webform (Part 7) and confirm the server's mail settings are configured correctly.
 
 
 SHAREABLE LINK FORMATS — QUICK REFERENCE

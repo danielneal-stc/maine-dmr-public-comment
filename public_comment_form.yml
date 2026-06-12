@@ -87,6 +87,7 @@ elements: |-
       '#title': Attachments
       '#multiple': true
       '#uri_scheme': public
+      '#file_extensions': 'jpg jpeg png heic webp pdf'
     confirmtrue:
       '#type': checkbox
       '#title': 'I confirm that the comments submitted herein are truthful and accurate to the best of my knowledge.'
