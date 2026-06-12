@@ -175,9 +175,11 @@ Step 2 — Create the content type
 2. Click Add content type.
 3. Enter the following:
       Name:         Public Comment Form
-      Machine name: public_comment_form  (verify this matches exactly — it auto-fills)
+      Machine name: public_comment_form
 4. Under Display settings, make sure "Display author and date information" is turned off.
 5. Click Save and manage fields.
+
+IMPORTANT: After entering the name, Drupal will auto-fill the machine name. You must verify it reads exactly "public_comment_form" before saving. If it does not match exactly, the module will not be able to find nodes of this type and the manual form will not work. Click "Edit" next to the machine name to correct it if needed.
 
 Step 3 — Add the required fields
 
