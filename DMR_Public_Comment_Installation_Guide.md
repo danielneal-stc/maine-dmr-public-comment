@@ -74,9 +74,15 @@ Step 1 — Copy the module files
           custom/
             dmr_public_comment/
               dmr_public_comment.info.yml
+              dmr_public_comment.libraries.yml
               dmr_public_comment.module
               dmr_public_comment.routing.yml
               dmr_public_comment.services.yml
+              config/
+                install/
+                  dmr_public_comment.settings.yml
+                schema/
+                  dmr_public_comment.schema.yml
               js/
                 case_autofill.js
               src/
