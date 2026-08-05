@@ -1,1 +1,19 @@
 .DS_Store
+
+# Local-only security remediation prompts. Never publish to GitHub / Maine.
+/remediation-prompts/
+
+# Internal working documents. These are our own response and review material,
+# not part of the module, and the interface test names staging infrastructure.
+# The client-facing versions of these live outside the repo.
+/DMR_Public_Comment_Findings_*.csv
+/DMR_Public_Comment_Interface_Test.txt
+
+# The automated test suite is kept locally rather than shipped. It is still run
+# before every handover: see STATUS.md for the command and the current result.
+/tests/
+
+# Developer tooling. Nothing the module needs in order to run, so it is kept out
+# of the distributed code. Both are still used locally before a handover.
+/phpcs.xml
+/phpstan.neon

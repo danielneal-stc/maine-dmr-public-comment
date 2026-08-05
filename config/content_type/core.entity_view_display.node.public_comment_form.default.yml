@@ -1,0 +1,73 @@
+# How a comment period reads on its own node page. The public comment form does
+# not render this: it fetches the same values as JSON from the module's node
+# endpoint. This display is for staff checking what they published.
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.field.node.public_comment_form.field_dmr_pc_applicant_name
+    - field.field.node.public_comment_form.field_dmr_pc_license_type
+    - field.field.node.public_comment_form.field_dmr_pc_location
+    - field.field.node.public_comment_form.field_dmr_pc_period_end
+    - field.field.node.public_comment_form.field_dmr_pc_period_start
+    - field.field.node.public_comment_form.field_dmr_pc_town
+    - node.type.public_comment_form
+  module:
+    - datetime
+    - options
+id: node.public_comment_form.default
+targetEntityType: node
+bundle: public_comment_form
+mode: default
+content:
+  field_dmr_pc_applicant_name:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 1
+    region: content
+  field_dmr_pc_license_type:
+    type: list_default
+    label: above
+    settings: {  }
+    third_party_settings: {  }
+    weight: 4
+    region: content
+  field_dmr_pc_location:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 3
+    region: content
+  field_dmr_pc_period_end:
+    type: datetime_default
+    label: above
+    settings:
+      timezone_override: ''
+      format_type: medium
+    third_party_settings: {  }
+    weight: 6
+    region: content
+  field_dmr_pc_period_start:
+    type: datetime_default
+    label: above
+    settings:
+      timezone_override: ''
+      format_type: medium
+    third_party_settings: {  }
+    weight: 5
+    region: content
+  field_dmr_pc_town:
+    type: string
+    label: above
+    settings:
+      link_to_entity: false
+    third_party_settings: {  }
+    weight: 2
+    region: content
+hidden:
+  links: true

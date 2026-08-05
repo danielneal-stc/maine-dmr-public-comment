@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_dmr_pc_period_end
+    - node.type.public_comment_form
+  module:
+    - datetime
+id: node.public_comment_form.field_dmr_pc_period_end
+field_name: field_dmr_pc_period_end
+entity_type: node
+bundle: public_comment_form
+label: 'Comment Period End'
+description: 'The comment period closes at 4:00 PM Eastern on this date. Required: with no end date the form refuses every comment on this application.'
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: datetime

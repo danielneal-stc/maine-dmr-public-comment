@@ -1,41 +1,68 @@
 <?php
 
+/**
+ * @file
+ * Hooks and legacy helpers for the DMR Public Comment module.
+ *
+ * The logic that used to live here now lives in services under src/Service, so
+ * that the webform handlers and the autofill controller can have it injected
+ * rather than calling global functions:
+ *   - dmr_public_comment.mode_resolver decides whether a request is a Pega case
+ *     or a Drupal node, and refuses anything ambiguous.
+ *   - dmr_public_comment.comment_period decides whether a period is open.
+ *   - dmr_public_comment.node_source reads a public_comment_form node.
+ *
+ * What remains here is the hooks Drupal calls procedurally, and two thin
+ * wrappers kept for anything outside the module that already calls them.
+ */
+
 use Drupal\Core\Form\FormStateInterface;
 
 /**
- * Resolves a ?nid= query parameter to a numeric node ID.
+ * Resolves a nid parameter to a numeric node ID.
  *
- * Accepts either a numeric ID ("5") or a URL alias ("musky-oysters-2026").
- * Returns NULL if the parameter is empty or cannot be resolved to a node.
+ * Kept as a wrapper around dmr_public_comment.mode_resolver so that a script or
+ * a site customisation written against this function keeps working. New code
+ * should inject the service instead.
  *
  * @param string|null $param
- *   The raw value of the ?nid= query parameter.
+ *   The raw value of the nid query parameter or hidden field.
  *
  * @return int|null
  *   The numeric node ID, or NULL if unresolvable.
+ *
+ * @see \Drupal\dmr_public_comment\Service\SubmissionModeResolver::resolveNid()
  */
 function dmr_public_comment_resolve_nid(?string $param): ?int {
-  if ($param === NULL || $param === '') {
-    return NULL;
-  }
+  return \Drupal::service('dmr_public_comment.mode_resolver')->resolveNid($param);
+}
 
-  if (ctype_digit($param)) {
-    return (int) $param;
-  }
-
-  // Resolve URL alias (e.g. "musky-oysters-2026") to its internal node path.
-  $path = \Drupal::service('path_alias.manager')->getPathByAlias('/' . ltrim($param, '/'));
-  if (preg_match('/^\/node\/(\d+)$/', $path, $matches)) {
-    return (int) $matches[1];
-  }
-
-  return NULL;
+/**
+ * Decides whether a form request is in Pega mode or node mode.
+ *
+ * Kept as a wrapper around dmr_public_comment.mode_resolver, on the same terms
+ * as dmr_public_comment_resolve_nid(). The rules, and the reason the resolver
+ * fails closed rather than choosing between two disagreeing client-supplied
+ * values, are documented on the service.
+ *
+ * @param mixed $posted_case_id
+ *   The submitted case_id element value.
+ * @param mixed $posted_nid
+ *   The submitted nid element value.
+ *
+ * @return array
+ *   Keys: mode, case_id, nid, reason.
+ *
+ * @see \Drupal\dmr_public_comment\Service\SubmissionModeResolver::resolve()
+ */
+function dmr_public_comment_resolve_mode($posted_case_id = NULL, $posted_nid = NULL): array {
+  return \Drupal::service('dmr_public_comment.mode_resolver')->resolve($posted_case_id, $posted_nid);
 }
 
 /**
  * Attaches the autofill library and passes context-appropriate settings to JS.
  *
- * When ?nid= is present (numeric ID or URL alias), the resolved node ID is
+ * When a nid is present (numeric ID or URL alias), the resolved node ID is
  * passed so JS fetches field values from the node data endpoint (node mode).
  * Otherwise the Pega case endpoint is used and JS reads case_id from the
  * query string (Pega mode).
@@ -47,12 +74,154 @@ function dmr_public_comment_form_alter(&$form, FormStateInterface $form_state, $
 
   $form['#attached']['library'][] = 'dmr_public_comment/case_autofill';
 
-  $nid = dmr_public_comment_resolve_nid(\Drupal::request()->query->get('nid'));
+  $resolver = \Drupal::service('dmr_public_comment.mode_resolver');
+  $nid = $resolver->resolveNid(\Drupal::request()->query->get('nid'));
   if ($nid) {
     $form['#attached']['drupalSettings']['dmrPublicComment']['nodeApiBase'] = '/dmr/public-comment/node/';
     $form['#attached']['drupalSettings']['dmrPublicComment']['nodeId'] = $nid;
   }
   else {
     $form['#attached']['drupalSettings']['dmrPublicComment']['apiBase'] = '/dmr/public-comment/case/';
+  }
+}
+
+/**
+ * Adds the content-type check to the public comment form's file uploads.
+ *
+ * The webform element only checks a file's extension, so a text file or an
+ * executable renamed to ".pdf" is accepted, stored, and then forwarded to Pega
+ * for staff to open. This adds a validator that reads the file's own
+ * bytes and refuses anything that is not the format its name claims.
+ *
+ * Done in a hook rather than as an '#upload_validators' property in
+ * config/install/webform.webform.public_comment_form.yml for two reasons. It
+ * keeps the check out of reach of the Webform UI, where re-saving the element
+ * would drop a property Webform does not know about and silently switch the
+ * check off with nothing to show it had happened. And it leaves the webform
+ * configuration untouched, so that file's dependencies stay exactly
+ * [dmr_public_comment].
+ *
+ * Runs immediately after WebformManagedFileBase::prepare(), which is where the
+ * element's other upload validators are set, and adds a key rather than
+ * replacing the array, so core's extension, size and name-length checks all
+ * still apply.
+ *
+ * @param array $element
+ *   The managed_file element being built.
+ * @param \Drupal\Core\Form\FormStateInterface $form_state
+ *   The form state. Not used: the check applies to every upload on this form.
+ * @param array $context
+ *   The element context. Not used, for the same reason.
+ *
+ * @see \Drupal\dmr_public_comment\Plugin\Validation\Constraint\FileContentMatchesExtensionConstraint
+ * @see \Drupal\webform\Plugin\WebformElementManager::buildElement()
+ */
+function dmr_public_comment_webform_element_managed_file_alter(array &$element, FormStateInterface $form_state, array $context) {
+  if (($element['#webform'] ?? '') !== 'public_comment_form') {
+    return;
+  }
+
+  $element['#upload_validators']['DmrPublicCommentFileContent'] = [];
+}
+
+/**
+ * Removes uploaded files that Drupal wrote to disk but never recorded.
+ *
+ * Drupal's own cron clears abandoned uploads by walking FILE RECORDS, so a file
+ * with no record is invisible to it and stays for ever. This form can produce
+ * exactly that, and not rarely:
+ *
+ * \Drupal\file\Upload\FileUploadHandler::handleFileUpload() runs the upload
+ * validators (extension, size, and this module's content check) BEFORE moving
+ * the upload into place, so anything they reject never reaches the directory.
+ * Entity-level constraints are different: they run AFTER the move, and when one
+ * of them rejects the file the handler returns without deleting what it has
+ * just written and without saving a record. On a site where something refuses
+ * the private scheme, which the Drupal Canvas module does by default, EVERY
+ * upload a visitor attempts leaves its bytes behind.
+ *
+ * Those files are not reachable from the web, but they are documents members of
+ * the public uploaded, kept indefinitely, with nothing tracking them. This
+ * removes them.
+ *
+ * Deliberately narrow: it looks only inside this form's own directory, only at
+ * files with no record at all, and only at files old enough that nothing could
+ * still be working on them. A file belonging to a comment someone is part way
+ * through writing HAS a record, so it is never in scope.
+ */
+function dmr_public_comment_cron(): void {
+  // How long a file with no record is left alone. Only has to outlast anything
+  // that could still be working on it, and the gap between Drupal writing an
+  // upload and recording it is milliseconds, so a day is generous.
+  $maxAgeHours = 24;
+
+  // Ceiling on one cron run, so a site with a large backlog clears it over
+  // several runs rather than stalling cron once.
+  $batchSize = 200;
+
+  $fileSystem = \Drupal::service('file_system');
+  $directory = 'private://webform/public_comment_form';
+
+  // No private storage, or the form has never taken an upload.
+  if (!is_dir($fileSystem->realpath($directory) ?: '')) {
+    return;
+  }
+
+  $found = $fileSystem->scanDirectory($directory, '/.*/', ['recurse' => TRUE]);
+  if (!$found) {
+    return;
+  }
+
+  // Anything younger than the cutoff is left alone, so a file mid-upload is
+  // never a candidate.
+  $cutoff = \Drupal::time()->getRequestTime() - ($maxAgeHours * 3600);
+  $candidates = [];
+  foreach ($found as $uri => $file) {
+    $path = $fileSystem->realpath($uri);
+    if ($path === FALSE || !is_file($path) || filemtime($path) > $cutoff) {
+      continue;
+    }
+    $candidates[] = $uri;
+    if (count($candidates) >= $batchSize) {
+      break;
+    }
+  }
+
+  if (!$candidates) {
+    return;
+  }
+
+  // One query for the whole batch. Access checking is off because this is a
+  // maintenance task with no user behind it, and it only reads URIs.
+  $tracked = \Drupal::entityTypeManager()->getStorage('file')->getQuery()
+    ->accessCheck(FALSE)
+    ->condition('uri', $candidates, 'IN')
+    ->execute();
+  $trackedUris = [];
+  foreach (\Drupal::entityTypeManager()->getStorage('file')->loadMultiple($tracked) as $file) {
+    $trackedUris[$file->getFileUri()] = TRUE;
+  }
+
+  $deleted = 0;
+  foreach ($candidates as $uri) {
+    if (isset($trackedUris[$uri])) {
+      continue;
+    }
+    try {
+      if ($fileSystem->delete($uri)) {
+        $deleted++;
+      }
+    }
+    catch (\Throwable $e) {
+      // A file that cannot be removed must not stop the rest of cron. It will
+      // be a candidate again on the next run.
+      \Drupal::logger('dmr_public_comment')->warning('An untracked public comment attachment could not be removed. It will be retried on the next cron run.');
+    }
+  }
+
+  if ($deleted > 0) {
+    // The count only. Filenames are chosen by members of the public and can
+    // carry personal information, so they are not written to the log.
+    \Drupal::logger('dmr_public_comment')->notice('Removed @count public comment attachment(s) that were written to storage but never recorded by Drupal. This normally means something on the site refused the upload after it had been written; see the private file system check on the status report.', ['@count' => $deleted]);
   }
 }

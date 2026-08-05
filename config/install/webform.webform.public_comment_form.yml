@@ -1,4 +1,3 @@
-uuid: dd814ccb-7f17-4bf5-9167-46c81934359d
 langcode: en
 status: open
 dependencies:
@@ -73,20 +72,20 @@ elements: |-
           ':input[name="license_type"]':
             value: 'Experimental Lease'
     comments:
-      '#type': text_format
+      '#type': textarea
       '#title': Comments
       '#required': true
+      '#rows': 8
+      '#maxlength': 2500
+      '#description': 'Up to 2,500 characters. If your comment is longer than that, please attach the full text as a PDF below.'
       '#access_update_roles': {  }
       '#access_view_roles':
         - authenticated
-      '#allowed_formats':
-        webform_default: webform_default
-      '#hide_help': true
     attachments:
       '#type': managed_file
       '#title': Attachments
       '#multiple': true
-      '#uri_scheme': public
+      '#uri_scheme': private
       '#file_extensions': 'jpg jpeg png heic webp pdf'
     confirmtrue:
       '#type': checkbox
@@ -107,6 +106,17 @@ css: |+
     padding: 2rem;
     font-family: sans-serif;
     font-size: 16px;
+  }
+
+  /* Form controls do not inherit the font above on their own: browsers apply
+     their own defaults to them, and for a textarea that default is monospace.
+     That is why the comment box used to look different from the other fields.
+     Stated explicitly so every box on the form matches. */
+  .webform-submission-form input,
+  .webform-submission-form textarea,
+  .webform-submission-form select {
+    font-family: inherit;
+    font-size: inherit;
   }
 
   /* Actions row */
@@ -243,10 +253,6 @@ css: |+
     margin-top: 1rem;
   }
 
-  .ck.ck-label.ck-voice-label, .ck.ck-powered-by {
-    display: none !important;
-  }
-
   /* Style the top error banner */
   .messages.messages--error {
     background-color: #fff0f0;
@@ -280,7 +286,7 @@ settings:
   page_confirm_path: ''
   page_theme_name: ''
   form_title: source_entity_webform
-  form_submit_once: false
+  form_submit_once: true
   form_open_message: ''
   form_close_message: ''
   form_exception_message: ''
@@ -387,9 +393,9 @@ settings:
   limit_total_interval: null
   limit_total_message: ''
   limit_total_unique: false
-  limit_user: null
-  limit_user_interval: null
-  limit_user_message: ''
+  limit_user: 30
+  limit_user_interval: 3600
+  limit_user_message: 'This form has accepted an unusually high number of comments from this browser in the last hour and has paused. If you are commenting on a group of applications, please email the rest to dmraquaculture@maine.gov, or try again in an hour.'
   limit_user_unique: false
   entity_limit_total: null
   entity_limit_total_interval: null
@@ -473,14 +479,11 @@ handlers:
   email:
     id: email
     handler_id: email
-    label: 'Submission Confirmation (Pega)'
-    notes: ''
+    label: 'Comment received confirmation (to the submitter)'
+    notes: 'Goes to the address the visitor typed, in BOTH modes. Carries no submitted values and no attachments: everything a submitter is sent is fixed text. Deliberately says the comment was RECEIVED, not that it reached Pega, because this fires whether or not the Pega write succeeded.'
     status: true
-    conditions:
-      enabled:
-        ':input[name="case_id"]':
-          filled: true
-    weight: 0
+    conditions: {  }
+    weight: 10
     settings:
       states:
         - completed
@@ -488,7 +491,7 @@ handlers:
       to_options: {  }
       bcc_mail: ''
       bcc_options: {  }
-      cc_mail: dmraquaculture@maine.gov
+      cc_mail: ''
       cc_options: {  }
       from_mail: _default
       from_options: {  }
@@ -497,14 +500,21 @@ handlers:
       return_path: ''
       sender_mail: ''
       sender_name: ''
-      subject: 'Public Comment Submitted'
-      body: _default
+      subject: 'Your public comment has been received'
+      body: |
+        Thank you for commenting on an aquaculture licensing application.
+
+        Your comment has been received by the Maine Department of Marine Resources. No reply is needed and no action is required from you.
+
+        If the page shown after you submitted included a red message and a reference code, please email dmraquaculture@maine.gov and quote that code so that staff can finish recording your comment.
+
+        This message is sent automatically. Please do not reply to it.
       excluded_elements: {  }
       ignore_access: false
       exclude_empty: true
       exclude_empty_checkbox: false
-      exclude_attachments: false
-      html: true
+      exclude_attachments: true
+      html: false
       attachments: false
       twig: false
       theme_name: ''
@@ -514,22 +524,22 @@ handlers:
   email_1:
     id: email
     handler_id: email_1
-    label: 'Submission Confirmation (Paper Application)'
-    notes: ''
+    label: 'Staff notification: paper application (to dmraquaculture@maine.gov)'
+    notes: 'nid mode only. There is no Pega record for a paper application, so this email IS the delivery mechanism: it carries the full submission and the uploaded files. It is addressed to the internal mailbox and nowhere else. Attachments are only ever emailed here, never to a submitter address.'
     status: true
     conditions:
       enabled:
         ':input[name="nid"]':
           filled: true
-    weight: 0
+    weight: 10
     settings:
       states:
         - completed
-      to_mail: '[webform_submission:values:email:raw]'
+      to_mail: dmraquaculture@maine.gov
       to_options: {  }
       bcc_mail: ''
       bcc_options: {  }
-      cc_mail: dmraquaculture@maine.gov
+      cc_mail: ''
       cc_options: {  }
       from_mail: _default
       from_options: {  }
@@ -538,15 +548,72 @@ handlers:
       return_path: ''
       sender_mail: ''
       sender_name: ''
-      subject: _default
-      body: _default
+      subject: 'Public comment received: paper application (no Pega record)'
+      body: |
+        A public comment was submitted for a paper application, that is one that is not tracked in Pega.
+
+        There is no Pega record for this comment. This email and the Drupal submission are the record of it. Any files the commenter uploaded are attached to this message and are also kept in Drupal.
+
+        Submitted on [webform_submission:created]
+
+        [webform_submission:values]
       excluded_elements: {  }
-      ignore_access: false
+      ignore_access: true
       exclude_empty: true
       exclude_empty_checkbox: false
       exclude_attachments: false
-      html: true
+      html: false
       attachments: true
+      twig: false
+      theme_name: ''
+      langcode: ''
+      parameters: {  }
+      debug: false
+  email_2:
+    id: email
+    handler_id: email_2
+    label: 'Staff notification: Pega case (to dmraquaculture@maine.gov)'
+    notes: 'case_id mode only. Form data with NO attachments. attachments MUST stay false: the comment_submission handler deletes the uploaded files as soon as Pega confirms storing them, and that runs before this handler, so attaching them would send a mail with silently missing files. The wording tells staff this email does not confirm the Pega write.'
+    status: true
+    conditions:
+      enabled:
+        ':input[name="case_id"]':
+          filled: true
+    weight: 10
+    settings:
+      states:
+        - completed
+      to_mail: dmraquaculture@maine.gov
+      to_options: {  }
+      bcc_mail: ''
+      bcc_options: {  }
+      cc_mail: ''
+      cc_options: {  }
+      from_mail: _default
+      from_options: {  }
+      from_name: _default
+      reply_to: ''
+      return_path: ''
+      sender_mail: ''
+      sender_name: ''
+      subject: 'Public comment received: Pega case (confirm it in Pega)'
+      body: |
+        A public comment was submitted for an application that is tracked in Pega.
+
+        The comment and any uploaded files are sent to Pega separately, and the files are then removed from Drupal, so nothing is attached to this email. This is a notification that a comment arrived, NOT confirmation that Pega accepted it.
+
+        Check the case in Pega. If the comment is not there, see Reports -> Recent log messages, filtered to dmr_public_comment, and follow PART 8 of the installation guide.
+
+        Submitted on [webform_submission:created]
+
+        [webform_submission:values]
+      excluded_elements: {  }
+      ignore_access: true
+      exclude_empty: true
+      exclude_empty_checkbox: false
+      exclude_attachments: true
+      html: false
+      attachments: false
       twig: false
       theme_name: ''
       langcode: ''

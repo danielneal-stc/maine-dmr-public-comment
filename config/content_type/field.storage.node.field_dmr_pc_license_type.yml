@@ -1,0 +1,49 @@
+# The stored value is the machine name (e.g. experimental_lease); the module
+# resolves it to the label (e.g. "Experimental Lease") before it reaches the
+# form or Pega, because Pega works in labels and the hearing-request checkbox is
+# shown by matching the label "Experimental Lease". Keep the labels below
+# exactly as Pega spells them.
+langcode: en
+status: true
+dependencies:
+  module:
+    - node
+    - options
+id: node.field_dmr_pc_license_type
+field_name: field_dmr_pc_license_type
+entity_type: node
+type: list_string
+settings:
+  allowed_values:
+    -
+      value: experimental_lease
+      label: 'Experimental Lease'
+    -
+      value: standard_lease
+      label: 'Standard Lease'
+    -
+      value: standard_conversion
+      label: 'Standard Conversion'
+    -
+      value: scientific_experimental_lease_renewal
+      label: 'Scientific Experimental Lease Renewal'
+    -
+      value: standard_lease_renewal
+      label: 'Standard Lease Renewal'
+    -
+      value: lease_amendment
+      label: 'Lease Amendment'
+    -
+      value: lease_expansion
+      label: 'Lease Expansion'
+    -
+      value: lease_transfer
+      label: 'Lease Transfer'
+  allowed_values_function: ''
+module: options
+locked: false
+cardinality: 1
+translatable: true
+indexes: {  }
+persist_with_no_fields: false
+custom_storage: false

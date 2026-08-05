@@ -10,3 +10,26 @@ services:
       - '@cache.default'
       - '@logger.channel.dmr_public_comment'
       - '@config.factory'
+      - '@key.repository'
+
+  # The one authority on when a comment period is open. Consumed by both webform
+  # handlers and by the autofill endpoints, which must agree about every period.
+  dmr_public_comment.comment_period:
+    class: Drupal\dmr_public_comment\Service\CommentPeriod
+    arguments:
+      - '@datetime.time'
+
+  # Decides whether a request is a Pega case or a Drupal node, and fails closed
+  # on anything ambiguous. Every consumer of case_id / nid goes through this.
+  dmr_public_comment.mode_resolver:
+    class: Drupal\dmr_public_comment\Service\SubmissionModeResolver
+    arguments:
+      - '@request_stack'
+      - '@path_alias.manager'
+
+  # Owns the public_comment_form bundle and field names, the access rules for
+  # reading one, and the License Type label lookup.
+  dmr_public_comment.node_source:
+    class: Drupal\dmr_public_comment\Service\PublicCommentNodeSource
+    arguments:
+      - '@entity_type.manager'

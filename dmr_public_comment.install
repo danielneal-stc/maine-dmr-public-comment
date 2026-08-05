@@ -1,0 +1,497 @@
+<?php
+
+/**
+ * @file
+ * Install and update hooks for the DMR Public Comment module.
+ */
+
+use Symfony\Component\Yaml\Yaml;
+use Drupal\Component\Utility\Bytes;
+use Drupal\Core\Config\Entity\ConfigEntityStorageInterface;
+use Drupal\Core\Config\FileStorage;
+use Drupal\Core\StreamWrapper\StreamWrapperInterface;
+
+/**
+ * Checks the two site-level prerequisites this module cannot provide itself.
+ *
+ * Both of them fail SILENTLY at the worst possible moment if they are missed,
+ * which is why they are checked here rather than left to the installation
+ * guide:
+ *
+ *   - Attachments are stored in private://. If the private file system is off,
+ *     or something on the site refuses that scheme, the visitor gets an upload
+ *     error at the moment they try to attach evidence to a comment.
+ *   - Attachments on a PAPER comment period are delivered ONLY as an email
+ *     attachment to the internal mailbox. Drupal's built-in mailer drops
+ *     attachments without a word, so that email arrives looking complete while
+ *     the actual evidence is gone.
+ *
+ * Runs at install and on the status report. Only an ERROR stops an install, and
+ * that is reserved for the one case that is genuinely broken rather than merely
+ * unconfigured: see _dmr_public_comment_check_private_files(). A prerequisite
+ * the operator can satisfy afterwards is a warning, so installing the module
+ * and configuring the server can happen in either order.
+ *
+ * Drupal 11.2 split this hook, but SystemManager::listRequirements() still
+ * invokes the legacy form for 'runtime', and drupal_check_module() still
+ * invokes it for 'install', so one implementation covers Drupal 10 and 11.
+ *
+ * @param string $phase
+ *   Either 'install', 'runtime' or 'update'.
+ *
+ * @return array
+ *   Requirements keyed by name, in hook_requirements() format.
+ */
+function dmr_public_comment_requirements(string $phase): array {
+  if ($phase === 'update') {
+    return [];
+  }
+
+  return [
+    'dmr_public_comment_private_files' => _dmr_public_comment_check_private_files(),
+    'dmr_public_comment_upload_limits' => _dmr_public_comment_check_upload_limits(),
+    'dmr_public_comment_mail_attachments' => _dmr_public_comment_check_mail_attachments(),
+  ];
+}
+
+/**
+ * Compares PHP's upload limits with the limits the form promises the public.
+ *
+ * Whatever attachment limits the department chooses, they are only reachable if
+ * PHP allows them: PHP caps every upload at upload_max_filesize, caps the whole
+ * submission at post_max_size, and caps the file count at max_file_uploads,
+ * whatever Webform is configured to do. PHP's own defaults (commonly 2 MB and
+ * 8 MB) are well below what a form collecting scanned documents needs, so an
+ * untouched server quietly enforces a much smaller limit than the form
+ * advertises, and a visitor attaching a scanned document hits it without any
+ * explanation of why the stated limit did not apply.
+ *
+ * The limits themselves belong to the department, not to this module, so every
+ * figure compared here is read from the live webform rather than assumed. A
+ * limit the form does not set is not checked at all: an unset per-file size or
+ * an unlimited file count means Webform defers to PHP, and there is then no
+ * mismatch to warn about.
+ *
+ * Reported as a warning rather than an error: small attachments still work, so
+ * this degrades the form rather than breaking it.
+ *
+ * @return array
+ *   One requirement in hook_requirements() format.
+ */
+function _dmr_public_comment_check_upload_limits(): array {
+  $requirement = [
+    'title' => t('DMR Public Comment: upload size limits'),
+  ];
+
+  // Read what the form actually asks for. Nothing is assumed: a limit that is
+  // not configured stays NULL and is skipped below.
+  $webform = \Drupal::config('webform.webform.public_comment_form');
+  $element = $webform->get('elements');
+  $perFile = NULL;
+  $count = NULL;
+  if (is_string($element) && $element !== '') {
+    try {
+      $parsed = Yaml::parse($element);
+      $size = $parsed['attachments']['#max_filesize'] ?? NULL;
+      if (is_numeric($size) && (int) $size > 0) {
+        $perFile = (int) $size;
+      }
+      // '#multiple' is TRUE for "as many as PHP allows" and an integer for a
+      // fixed cap. Only a fixed cap is something PHP can fall short of.
+      $multiple = $parsed['attachments']['#multiple'] ?? NULL;
+      if (is_numeric($multiple) && (int) $multiple > 1) {
+        $count = (int) $multiple;
+      }
+    }
+    catch (\Throwable $e) {
+      // An unreadable element list leaves every figure unknown, so nothing
+      // below is compared and no misleading warning is produced.
+    }
+  }
+  $totalLabel = (string) ($webform->get('settings.form_file_limit') ?: '');
+
+  $needTotal = $totalLabel === '' ? 0 : Bytes::toNumber($totalLabel);
+  $havePerFile = Bytes::toNumber(ini_get('upload_max_filesize') ?: '0');
+  $haveTotal = Bytes::toNumber(ini_get('post_max_size') ?: '0');
+  $haveCount = (int) ini_get('max_file_uploads');
+
+  $problems = [];
+  if ($perFile !== NULL && $havePerFile > 0 && $havePerFile < $perFile * 1024 * 1024) {
+    $problems[] = t('upload_max_filesize is @have, but the form offers @need per file', [
+      '@have' => ini_get('upload_max_filesize'),
+      '@need' => $perFile . 'M',
+    ]);
+  }
+  if ($needTotal > 0 && $haveTotal > 0 && $haveTotal < $needTotal) {
+    $problems[] = t('post_max_size is @have, but the form allows @need per comment', [
+      '@have' => ini_get('post_max_size'),
+      '@need' => $totalLabel,
+    ]);
+  }
+  if ($count !== NULL && $haveCount > 0 && $haveCount < $count) {
+    $problems[] = t('max_file_uploads is @have, but the form accepts @need files', [
+      '@have' => $haveCount,
+      '@need' => $count,
+    ]);
+  }
+
+  if ($problems) {
+    return $requirement + [
+      'value' => t('PHP allows less than the form offers'),
+      'severity' => _dmr_public_comment_severity('warning'),
+      'description' => t('PHP is enforcing a smaller attachment limit than the public comment form is configured to accept: @problems. Webform lowers the limit it shows the visitor to match PHP, so nobody is misled, but the smaller limit is below what a scanned page or a phone photograph typically needs and those people will not be able to attach their evidence. Raise these in php.ini (or the hosting control panel) and restart PHP. post_max_size must stay above upload_max_filesize, because every file in one comment is sent in a single request. See Part 2, Step 3b of the installation guide.', ['@problems' => implode('; ', $problems)]),
+    ];
+  }
+
+  return $requirement + [
+    'value' => t('PHP allows @file per file, @total per request', [
+      '@file' => ini_get('upload_max_filesize'),
+      '@total' => ini_get('post_max_size'),
+    ]),
+    'severity' => _dmr_public_comment_severity('ok'),
+  ];
+}
+
+/**
+ * Maps a severity name to the value this Drupal version expects.
+ *
+ * Drupal 11.2 replaced the REQUIREMENT_* integers with a RequirementSeverity
+ * enum and deprecated passing the integers. The module supports Drupal 10 too,
+ * where the enum does not exist, so the right one is chosen at runtime.
+ *
+ * @param string $name
+ *   One of 'ok', 'warning' or 'error'.
+ *
+ * @return mixed
+ *   A RequirementSeverity case, or the matching REQUIREMENT_* integer.
+ */
+function _dmr_public_comment_severity(string $name) {
+  $enum = 'Drupal\Core\Extension\Requirement\RequirementSeverity';
+  if (enum_exists($enum)) {
+    return constant($enum . '::' . ['ok' => 'OK', 'warning' => 'Warning', 'error' => 'Error'][$name]);
+  }
+  return ['ok' => REQUIREMENT_OK, 'warning' => REQUIREMENT_WARNING, 'error' => REQUIREMENT_ERROR][$name];
+}
+
+/**
+ * Confirms that a file can actually be stored in the private file system.
+ *
+ * Two separate things have to be true, and only the first is covered by the
+ * installation guide:
+ *
+ *   1. The private stream wrapper exists, i.e. $settings['file_private_path']
+ *      is set and the directory behind it is usable.
+ *   2. A file entity whose URI uses that scheme survives entity validation.
+ *
+ * They are reported at different severities on purpose. The first is a server
+ * setting the operator can add whenever it suits them, and until they do the
+ * form still collects comments; only the attachment field stops working, and
+ * nothing falls back to public:// behind their back. Blocking the install over
+ * a prerequisite that can be satisfied afterwards would force an edit to
+ * settings.php before the module could even be switched on, so it is a warning.
+ *
+ * The second is an ERROR, because it is not a missing setting but a site that
+ * is actively broken: private storage is configured, yet every upload a visitor
+ * attempts will fail, with an error message that points at nothing the operator
+ * installed. That is close to undiagnosable without being told, so it is worth
+ * stopping the install for.
+ *
+ * The second is checked by validating a throwaway, never-saved file entity
+ * rather than by looking for known-bad modules by name. It has to be a
+ * behavioural check because any module may add a constraint to the file_uri
+ * field type, and at least one in wide use does: Drupal Canvas, which ships
+ * enabled in Drupal CMS, replaces the core field type with one that hard-codes
+ * an allowlist of ['public'] (see its FileUriItemOverride, which carries its
+ * own @todo about the problem, and drupal.org issue 3577155). On such a site
+ * EVERY private:// upload fails, with an error the visitor sees. Reading the
+ * live validation result catches that module, any future version of it, and
+ * anything else that behaves the same way.
+ *
+ * @return array
+ *   One requirement in hook_requirements() format.
+ */
+function _dmr_public_comment_check_private_files(): array {
+  $requirement = [
+    'title' => t('DMR Public Comment: attachment storage'),
+  ];
+
+  $wrappers = \Drupal::service('stream_wrapper_manager')
+    ->getWrappers(StreamWrapperInterface::WRITE_VISIBLE);
+
+  if (!isset($wrappers['private'])) {
+    return $requirement + [
+      'value' => t('Private file system is off'),
+      'severity' => _dmr_public_comment_severity('warning'),
+      'description' => t("The public comment form stores attachments in the private file system, so that files the public uploads are not left at a guessable web address. It is switched off, so visitors cannot attach anything to a comment until it is turned on. Comments themselves are unaffected and still submit normally, and nothing is stored publicly in the meantime. Add \$settings['file_private_path'] to web/sites/default/settings.php, pointing at a directory outside the web root that the web server can write to, then clear the cache. See Part 2, Step 3 of the installation guide."),
+    ];
+  }
+
+  // The file entity type is only guaranteed once the File module is installed.
+  // At install phase this module's own dependency on it may not be met yet, in
+  // which case the deeper check is simply deferred to the status report.
+  if (!\Drupal::moduleHandler()->moduleExists('file')) {
+    return $requirement + [
+      'value' => t('Private file system is on'),
+      'severity' => _dmr_public_comment_severity('ok'),
+    ];
+  }
+
+  try {
+    $probe = \Drupal::entityTypeManager()->getStorage('file')->create([
+      'uri' => 'private://.dmr-public-comment-probe',
+      'filename' => '.dmr-public-comment-probe',
+      'filemime' => 'application/octet-stream',
+      'status' => 0,
+      'uid' => 0,
+    ]);
+    $violations = $probe->validate();
+  }
+  catch (\Throwable $e) {
+    // A probe that cannot run must not take the status report down with it,
+    // and must not be reported as a pass either.
+    return $requirement + [
+      'value' => t('Could not be checked'),
+      'severity' => _dmr_public_comment_severity('warning'),
+      'description' => t('Whether an attachment can be stored privately could not be determined: @message. Confirm by hand that a file can be attached to the public comment form.', ['@message' => $e->getMessage()]),
+    ];
+  }
+
+  // Only violations about the URI matter. Anything else is an artefact of the
+  // probe entity being deliberately incomplete.
+  $blocking = [];
+  foreach ($violations as $violation) {
+    if (!str_starts_with($violation->getPropertyPath(), 'uri')) {
+      continue;
+    }
+    $constraint = $violation->getConstraint();
+    $source = '';
+    if ($constraint && preg_match('#^Drupal\\\\([a-z0-9_]+)\\\\#', get_class($constraint), $matches) === 1) {
+      $source = $matches[1];
+    }
+    $blocking[] = strip_tags((string) $violation->getMessage()) . ($source !== '' ? " (added by the '$source' module)" : '');
+  }
+
+  if ($blocking) {
+    return $requirement + [
+      'value' => t('Private files are rejected by another module'),
+      'severity' => _dmr_public_comment_severity('error'),
+      'description' => t('The private file system is configured, but something on this site refuses to store a file in it, so every attachment a visitor uploads to the public comment form will fail. Reported: @errors. The usual cause is the Drupal Canvas module, which ships enabled with Drupal CMS and allows only the public file scheme (drupal.org issue 3577155). Either uninstall that module, or apply its patch so the private scheme is accepted. Attachments must NOT be moved to the public file system to work around this: that would put files uploaded by the public at guessable addresses that need no login. See Part 2, Step 3 of the installation guide.', ['@errors' => implode('; ', $blocking)]),
+    ];
+  }
+
+  return $requirement + [
+    'value' => t('Private file system is on and accepts attachments'),
+    'severity' => _dmr_public_comment_severity('ok'),
+  ];
+}
+
+/**
+ * Reports whether the site's mailer is capable of sending file attachments.
+ *
+ * This only matters for paper (non-Pega) comment periods. Those have no Pega
+ * record, so the email to the internal mailbox IS the delivery of the comment
+ * and the uploaded files have to be on it. Drupal's built-in php_mail plugin
+ * cannot attach anything: Webform still sends the email, it still arrives, and
+ * nothing is logged, so the missing evidence is invisible from both ends.
+ *
+ * Only the definitely-broken case is reported as a problem. A site using any
+ * other mail plugin gets an OK that still says a real test is the only proof,
+ * because a contributed mailer can be configured to delegate back to PHP's and
+ * that cannot be established from configuration alone.
+ *
+ * @return array
+ *   One requirement in hook_requirements() format.
+ */
+function _dmr_public_comment_check_mail_attachments(): array {
+  $requirement = [
+    'title' => t('DMR Public Comment: email attachments'),
+  ];
+
+  $interface = \Drupal::config('system.mail')->get('interface') ?: [];
+  $plugin = (string) ($interface['default'] ?? 'php_mail');
+
+  $incapable = [
+    'php_mail' => t("Drupal's built-in mailer"),
+    'test_mail_collector' => t('the test mail collector'),
+  ];
+
+  if (isset($incapable[$plugin])) {
+    return $requirement + [
+      'value' => t('Attachments cannot be emailed (@plugin)', ['@plugin' => $plugin]),
+      'severity' => _dmr_public_comment_severity('warning'),
+      'description' => t('The site sends mail with @name, which silently discards file attachments. For a paper comment period there is no Pega record, so the email to the internal mailbox is the only delivery of the comment and any files uploaded with it would be lost without warning. Enable and configure one of Mail System (mailsystem), SMTP Authentication Support (smtp) or Symfony Mailer (symfony_mailer). See Part 2, Step 4 of the installation guide.', ['@name' => $incapable[$plugin]]),
+    ];
+  }
+
+  return $requirement + [
+    'value' => t('Sent with @plugin', ['@plugin' => $plugin]),
+    'severity' => _dmr_public_comment_severity('ok'),
+    'description' => t('This mailer can carry attachments. Configuration cannot prove it is reaching the internal mailbox with the files on it, so confirm once with a real paper-mode test submission that has a file attached. If your mail layer restricts which directories it will attach from, the private files directory has to be on its allowlist.'),
+  ];
+}
+
+/**
+ * Creates the public_comment_form content type, its fields and its displays.
+ *
+ * These objects are shipped as configuration in config/content_type, NOT in
+ * config/install, and are created here instead. config/install would be the
+ * usual home for them, but Drupal's default configuration installer creates
+ * config/install objects in the order its dependency sort produces, and that
+ * sort puts the License Type field STORAGE after the field instances that
+ * depend on it, which aborts the module install with "Attempted to create ...
+ * an instance of field with name field_dmr_pc_license_type ... when the field
+ * storage does not exist". The sort behaves that way because License Type is
+ * the module's only options list, so its storage is the only one carrying a
+ * dependency on the options module. Verified on Drupal 11.3.
+ *
+ * Creating them here fixes the order explicitly: the content type, then every
+ * field storage, then the field instances, then the displays. It also lets the
+ * field definition cache be refreshed in between, which is the other half of
+ * the same problem: a field storage saved earlier in this request is not yet in
+ * the entity field manager's cached definitions, and that cache is what a field
+ * instance resolves its storage through.
+ *
+ * Anything that already exists on the site is left alone rather than
+ * overwritten, so a site that built the content type by hand from an older
+ * version of the installation guide keeps its content type and simply gains the
+ * namespaced fields.
+ *
+ * The webform and this module's own settings stay in config/install: they are
+ * single objects with no ordering hazard.
+ */
+function dmr_public_comment_install(): void {
+  $source = new FileStorage(__DIR__ . '/config/content_type');
+  $names = $source->listAll();
+  sort($names);
+
+  // Each group is created in full before the next one starts.
+  $groups = [
+    ['node.type.'],
+    ['field.storage.'],
+    ['field.field.'],
+    ['core.entity_form_display.', 'core.entity_view_display.'],
+  ];
+
+  foreach ($groups as $group) {
+    foreach ($names as $name) {
+      foreach ($group as $prefix) {
+        if (str_starts_with($name, $prefix)) {
+          _dmr_public_comment_create_config($name, $source->read($name));
+        }
+      }
+    }
+
+    // The field instances created in the next group resolve their storage
+    // through the entity field manager, whose cached definitions do not include
+    // a storage saved moments ago in this same request.
+    if ($group === ['field.storage.']) {
+      \Drupal::service('entity_field.manager')->clearCachedFieldDefinitions();
+    }
+  }
+}
+
+/**
+ * Creates one configuration entity from a shipped configuration record.
+ *
+ * Never overwrites an object that already exists: on a site that was set up by
+ * hand, replacing its content type or a field it already has could discard
+ * settings the site depends on, and would do it silently. Skipped objects are
+ * logged so the difference is visible afterwards.
+ *
+ * @param string $name
+ *   The configuration object name, e.g. "node.type.public_comment_form".
+ * @param array|bool $data
+ *   The configuration record read from the shipped file.
+ */
+function _dmr_public_comment_create_config(string $name, $data): void {
+  if (!is_array($data)) {
+    throw new \RuntimeException("The DMR Public Comment module could not read its shipped configuration '$name'. The module folder is incomplete; copy it to the server again.");
+  }
+
+  if (\Drupal::service('config.storage')->exists($name)) {
+    \Drupal::logger('dmr_public_comment')->notice("Left the existing '@name' in place; the DMR Public Comment module did not overwrite it. Check it against the installation guide.", ['@name' => $name]);
+    return;
+  }
+
+  $entityTypeId = \Drupal::service('config.manager')->getEntityTypeIdByName($name);
+  if ($entityTypeId === FALSE) {
+    throw new \RuntimeException("The DMR Public Comment module ships '$name', which is not a configuration entity. It cannot be created on install.");
+  }
+
+  // createFromStorageRecord() belongs to config entity storage specifically,
+  // not to storage in general, so the narrowing is checked rather than assumed.
+  // getEntityTypeIdByName() above already means this should always hold; if it
+  // ever does not, saying so beats a fatal error part way through an install.
+  $storage = \Drupal::entityTypeManager()->getStorage($entityTypeId);
+  if (!$storage instanceof ConfigEntityStorageInterface) {
+    throw new \RuntimeException("The DMR Public Comment module ships '$name', whose entity type '$entityTypeId' is not stored as configuration. It cannot be created on install.");
+  }
+
+  $storage->createFromStorageRecord($data)->save();
+}
+
+/**
+ * Applies the security hardening settings to an existing installation.
+ *
+ * Config/install/dmr_public_comment.settings.yml is only read the first time a
+ * module is installed, so a site that already had this module keeps its old
+ * settings when new files are deployed over it. Without this update that site
+ * would keep the raw OAuth client secret in exportable configuration, and would
+ * be missing base_url_allowlist, cache_ttl, flood_threshold and flood_window,
+ * which makes the module fail closed and silently stop calling Pega.
+ *
+ * A fresh installation never runs this: config/install supplies the values and
+ * Drupal records the module at its current schema version.
+ */
+function dmr_public_comment_update_10001(): string {
+  $messages = [];
+  $configFactory = \Drupal::configFactory();
+  $config = $configFactory->getEditable('dmr_public_comment.settings');
+
+  // The client secret is no longer stored in configuration. It is resolved at
+  // request time from a Key entity, so drop any value left behind here.
+  if ($config->get('client_secret') !== NULL) {
+    $config->clear('client_secret');
+    $messages[] = 'Removed the raw OAuth client secret from configuration. Select a Key entity for it at /admin/config/dmr-public-comment, and treat the old secret as exposed: have Pega reissue it.';
+  }
+
+  // Kept in step with config/install/dmr_public_comment.settings.yml. The
+  // allowlist names Maine's five Pega environments exactly. It must not be
+  // reduced to a "*.pegacloud.net" wildcard: production is on pegacloud.com and
+  // the test clone is on pega.net, so that wildcard would block both.
+  $defaults = [
+    'client_secret_key' => '',
+    'base_url_allowlist' => [
+      'maine-dmr-dt6.pegacloud.net',
+      'maine-dmr-dt8.pegacloud.net',
+      'maine-dmr-dt8-clone.pega.net',
+      'maine-dmr-stg4.pegacloud.net',
+      'maine-dmr-leeds-prod.pegacloud.com',
+    ],
+    'cache_ttl' => 300,
+    'flood_threshold' => 60,
+    'flood_window' => 3600,
+  ];
+
+  $added = [];
+  foreach ($defaults as $key => $value) {
+    if ($config->get($key) === NULL) {
+      $config->set($key, $value);
+      $added[] = $key;
+    }
+  }
+  if ($added) {
+    $messages[] = 'Added default values for: ' . implode(', ', $added) . '.';
+  }
+
+  $config->save();
+
+  // Configuration left behind by this module's former name (pega_case_proxy).
+  // Those objects can still contain a plaintext client secret.
+  foreach ($configFactory->listAll('pega_case_proxy.') as $name) {
+    $configFactory->getEditable($name)->delete();
+    $messages[] = "Deleted leftover configuration '$name' from the module's former name; it could still have contained a plaintext client secret.";
+  }
+
+  return $messages ? implode(' ', $messages) : 'Configuration was already up to date; nothing to change.';
+}

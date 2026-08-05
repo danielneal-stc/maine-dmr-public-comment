@@ -1,3 +1,33 @@
+# The OAuth client secret is NEVER stored here. It is resolved at runtime from a
+# Key entity (client_secret_key holds only the Key entity's machine name), whose
+# provider must be Environment or File so the secret lives outside configuration.
 base_url: ''
 client_id: ''
-client_secret: ''
+client_secret_key: ''
+# Hosts the Pega base URL is allowed to point at. Entries are exact hostnames or
+# a single "*.example.com" wildcard. An empty list blocks every outbound call.
+#
+# These are Maine's five Pega environments, listed exactly rather than as a
+# "*.pegacloud.net" wildcard: that wildcard would also allow every OTHER
+# organisation's Pega tenant, and it does not cover production at all, which is
+# on pegacloud.com rather than .net. Note the three different domains.
+#
+# A given site only ever talks to ONE of these, so narrow this list to that one
+# host once the site is pointed at its environment. See Part 4 of the
+# installation guide.
+base_url_allowlist:
+  # Dev.
+  - 'maine-dmr-dt6.pegacloud.net'
+  # Test.
+  - 'maine-dmr-dt8.pegacloud.net'
+  # Test clone, currently being upgraded. Note: pega.net, not pegacloud.net.
+  - 'maine-dmr-dt8-clone.pega.net'
+  # Pre-production.
+  - 'maine-dmr-stg4.pegacloud.net'
+  # Production. Note: pegacloud.com, not .net.
+  - 'maine-dmr-leeds-prod.pegacloud.com'
+# Seconds a successful autofill payload is cached before Pega/the node is re-read.
+cache_ttl: 300
+# Requests allowed per client IP per endpoint within flood_window seconds.
+flood_threshold: 60
+flood_window: 3600

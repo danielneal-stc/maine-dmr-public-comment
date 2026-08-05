@@ -3,5 +3,18 @@ type: module
 description: Submits public comments to Pega and fetches case data for the public comment form
 core_version_requirement: ^10 || ^11
 package: Custom
+configure: dmr_public_comment.settings
+# Installing this module creates the public comment webform and the
+# public_comment_form content type with its fields (config/install), so every
+# module those pieces of configuration rely on has to be listed here. Without
+# datetime, options or path, the comment period dates, the License Type list, or
+# the URL alias box on a comment period would silently fail to install.
 dependencies:
+  - drupal:node
+  - drupal:field
+  - drupal:file
+  - drupal:datetime
+  - drupal:options
+  - drupal:path
   - webform:webform
+  - key:key

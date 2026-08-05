@@ -8,6 +8,21 @@ dmr_public_comment.settings:
     client_id:
       type: string
       label: 'OAuth Client ID'
-    client_secret:
+    client_secret_key:
       type: string
-      label: 'OAuth Client Secret'
+      label: 'Key entity holding the OAuth Client Secret'
+    base_url_allowlist:
+      type: sequence
+      label: 'Allowed Pega base URL hosts'
+      sequence:
+        type: string
+        label: 'Hostname or *.domain pattern'
+    cache_ttl:
+      type: integer
+      label: 'Autofill response cache lifetime (seconds)'
+    flood_threshold:
+      type: integer
+      label: 'Autofill requests allowed per client IP per window'
+    flood_window:
+      type: integer
+      label: 'Flood control window (seconds)'

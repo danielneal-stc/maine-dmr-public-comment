@@ -1,0 +1,18 @@
+# Content type used for MANUAL (paper) comment periods, that is applications
+# that are not tracked in Pega. The public comment form reads its fields when it
+# is opened with ?nid=. The machine name must stay public_comment_form: the
+# module matches on it in CaseProxyController and CommentPeriodValidationHandler.
+#
+# No enforced dependency on dmr_public_comment: uninstalling the module leaves
+# this content type and any comment periods created with it in place, rather
+# than deleting the site's content.
+langcode: en
+status: true
+dependencies: {  }
+name: 'Public Comment Form'
+type: public_comment_form
+description: 'Application details for a public comment period that is not tracked in Pega. Publish one of these and share the form link with ?nid= set to its URL alias.'
+help: ''
+new_revision: true
+preview_mode: 1
+display_submitted: false

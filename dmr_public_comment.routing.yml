@@ -1,17 +1,28 @@
-# Public endpoints — data returned here is public information used on the
-# public comment form. Access is intentionally unrestricted.
+# Public endpoints used by the autofill JavaScript on the public comment form.
+# They are reachable anonymously by design, but they are not open proxies: the
+# case endpoint only returns data while a comment period is open, the node
+# endpoint enforces entity view access, both are rate limited per client IP,
+# and successful payloads are cached. See CaseProxyController.
 dmr_public_comment.case_data:
   path: '/dmr/public-comment/case/{caseId}'
   defaults:
     _controller: '\Drupal\dmr_public_comment\Controller\CaseProxyController::getCaseData'
+  methods: [GET]
   requirements:
+    # Anonymous by design: the public comment form is filled in by members of
+    # the public who have no account. The controller is what restricts the
+    # response, returning data only while the comment period is open.
     _access: 'TRUE'
 
 dmr_public_comment.node_data:
   path: '/dmr/public-comment/node/{nid}'
   defaults:
     _controller: '\Drupal\dmr_public_comment\Controller\CaseProxyController::getNodeData'
+  methods: [GET]
   requirements:
+    # Anonymous by design, as above. Entity view access is enforced inside the
+    # controller instead, through PublicCommentNodeSource, so an unpublished or
+    # restricted comment period returns the same 404 as one that does not exist.
     _access: 'TRUE'
     nid: '\d+'
 

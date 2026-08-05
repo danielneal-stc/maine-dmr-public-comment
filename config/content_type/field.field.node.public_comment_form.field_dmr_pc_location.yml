@@ -1,0 +1,18 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_dmr_pc_location
+    - node.type.public_comment_form
+id: node.public_comment_form.field_dmr_pc_location
+field_name: field_dmr_pc_location
+entity_type: node
+bundle: public_comment_form
+label: Location
+description: 'The waterbody the proposal concerns.'
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: string

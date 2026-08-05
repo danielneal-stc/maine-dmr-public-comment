@@ -1,0 +1,20 @@
+langcode: en
+status: true
+dependencies:
+  config:
+    - field.storage.node.field_dmr_pc_license_type
+    - node.type.public_comment_form
+  module:
+    - options
+id: node.public_comment_form.field_dmr_pc_license_type
+field_name: field_dmr_pc_license_type
+entity_type: node
+bundle: public_comment_form
+label: 'License Type'
+description: 'Experimental Lease also shows the "I request a public hearing" checkbox on the comment form.'
+required: true
+translatable: false
+default_value: {  }
+default_value_callback: ''
+settings: {  }
+field_type: list_string
