@@ -50,7 +50,48 @@ function dmr_public_comment_requirements(string $phase): array {
   return [
     'dmr_public_comment_private_files' => _dmr_public_comment_check_private_files(),
     'dmr_public_comment_upload_limits' => _dmr_public_comment_check_upload_limits(),
+    'dmr_public_comment_upload_content' => _dmr_public_comment_check_upload_content(),
     'dmr_public_comment_mail_attachments' => _dmr_public_comment_check_mail_attachments(),
+  ];
+}
+
+/**
+ * Reports whether uploaded files are being checked against their real content.
+ *
+ * The form accepts photographs and PDFs, and on its own the attachment element
+ * judges a file only by its extension, so a document or a program renamed to
+ * ".pdf" is accepted and passed on to staff to open. This module adds a check
+ * that reads the file's own bytes, but it can only be applied on Drupal 10.2
+ * and later, where file validation is driven by constraints.
+ *
+ * On an older site the check cannot run. That is reported here rather than left
+ * silent, because everything else about the form looks and behaves normally and
+ * there would otherwise be nothing to show that uploads are being taken at face
+ * value. Attachments themselves still work; only this check is missing.
+ *
+ * @return array
+ *   One requirement in hook_requirements() format.
+ */
+function _dmr_public_comment_check_upload_content(): array {
+  $requirement = [
+    'title' => t('DMR Public Comment: uploaded file checks'),
+  ];
+
+  // The module file holds the same test the upload path uses, so the two can
+  // never disagree about whether the check is active.
+  \Drupal::moduleHandler()->loadInclude('dmr_public_comment', 'module');
+
+  if (dmr_public_comment_upload_content_check_available()) {
+    return $requirement + [
+      'value' => t('Uploads are checked against their actual content'),
+      'severity' => _dmr_public_comment_severity('ok'),
+    ];
+  }
+
+  return $requirement + [
+    'value' => t('Uploads are accepted on their file name alone'),
+    'severity' => _dmr_public_comment_severity('warning'),
+    'description' => t('This site is running a version of Drupal older than 10.2, which cannot apply the check that reads an uploaded file and confirms it really is the type its name claims. Attachments still work, and the allowed file types are still enforced, but a document or a program renamed to ".pdf" would be accepted and forwarded for a member of staff to open. Upgrading to Drupal 10.2 or later switches the check on with no further change. Until then, treat attachments on this form as unverified and make sure the virus scanning covered in Part 2, Step 5 of the installation guide is in place.'),
   ];
 }
 

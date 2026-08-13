@@ -106,6 +106,20 @@ function dmr_public_comment_form_alter(&$form, FormStateInterface $form_state, $
  * replacing the array, so core's extension, size and name-length checks all
  * still apply.
  *
+ * VERSION NOTE. '#upload_validators' only accepts constraint names from Drupal
+ * 10.2, where file validation moved onto Symfony constraints. Before that the
+ * same array held plain function names, which Drupal called directly, so
+ * putting a constraint name in it on an older site would at best be ignored and
+ * at worst try to call a function that does not exist and take every upload
+ * down with it. The check below therefore asks whether this module's constraint
+ * was actually discovered, which is true only on a version that supports it,
+ * and leaves the element completely untouched otherwise. Uploads then behave
+ * exactly as they did before the check existed, and the check switches itself
+ * on with no code change once the site is upgraded.
+ *
+ * A site where it is switched off is not left guessing: the status report says
+ * so. See _dmr_public_comment_check_upload_content().
+ *
  * @param array $element
  *   The managed_file element being built.
  * @param \Drupal\Core\Form\FormStateInterface $form_state
@@ -121,7 +135,33 @@ function dmr_public_comment_webform_element_managed_file_alter(array &$element, 
     return;
   }
 
+  if (!dmr_public_comment_upload_content_check_available()) {
+    return;
+  }
+
   $element['#upload_validators']['DmrPublicCommentFileContent'] = [];
+}
+
+/**
+ * Reports whether this Drupal can run the uploaded-file content check.
+ *
+ * Two things have to be true, and they arrived together in Drupal 10.2: file
+ * validation has to be driven by constraints rather than by plain functions,
+ * and this module's own constraint has to have been discovered. Asking about
+ * the constraint rather than comparing version numbers means the answer stays
+ * correct if the requirement ever moves, and means an upgrade turns the check
+ * on by itself.
+ *
+ * @return bool
+ *   TRUE when the content check can be applied to uploads.
+ */
+function dmr_public_comment_upload_content_check_available(): bool {
+  if (!\Drupal::hasService('file.validator')) {
+    return FALSE;
+  }
+
+  return \Drupal::service('validation.constraint')
+    ->hasDefinition('DmrPublicCommentFileContent');
 }
 
 /**
